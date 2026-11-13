@@ -47,3 +47,12 @@ class Report:
  review_id:str
  title:str
  created_at:str=''
+@dataclass
+class RunComparison:
+ id:str
+ run_a_id:str
+ run_b_id:str
+ mapping:dict
+ result:dict[str,Any]=field(default_factory=dict)
+ supersedes:str=''
+ created_at:str=''

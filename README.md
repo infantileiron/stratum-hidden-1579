@@ -6,7 +6,7 @@
 
 上游 `shenxi_logs_202611.csv` 为SX-01/02/03三孔各160点模拟测井。团队原用表格逐点硬阈值划分，噪声造成状态跳变、点态概率与全路径被混为一谈、缺采样后直接串链。本工程替代完整性核查、模型登记/命名修订、孔段与模型快照、异步解码和复核；下游地研档案组读取批准的模型状态序列CSV。输出是给定模型下隐状态，不是真实地层或地质安全判断。
 
-BoreholeDataset测井、StateModel人工配置模型、SequenceStudy锁定孔段、DecodeRun运行、LayerReview复核、Report报告六实体贯穿。六页：孔段档案、完整测井、状态模型、锁定与解码、后验与路径、地学复核，另有登录。两页复用BoreholeTrack、SequenceSummary、ModelMatrix。
+BoreholeDataset测井、StateModel人工配置模型、SequenceStudy锁定孔段、DecodeRun运行、LayerReview复核、Report报告、RunComparison归并比较七实体贯穿。七页：孔段档案、完整测井、状态模型、锁定与解码、后验与路径、地学复核、归并比较，另有登录。两页复用BoreholeTrack、SequenceSummary、ModelMatrix。
 
 ## 快速启动
 
@@ -20,9 +20,9 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 | 角色 / 账号 | 页面 | 权限与典型动作 |
 |---|---|---|
-| admin@shenxi.test / 孔段复核地学编辑 | 六页与审计 | 读写、批准/退回、核查模型状态解释 |
-| analyst@shenxi.test / 测井序列分析员 | 测井、模型、研究、结果、复核 | 导入、配置/修订模型、运行、提审、生成批准报告 |
-| viewer@shenxi.test / 地研档案阅览员 | 六页只读 | 查看与下载已批准CSV |
+| admin@shenxi.test / 孔段复核地学编辑 | 七页与审计 | 读写、批准/退回、核查模型状态解释 |
+| analyst@shenxi.test / 测井序列分析员 | 测井、模型、研究、结果、复核、比较 | 导入、配置/修订模型、运行、提审、生成批准报告、建立与重算归并比较 |
+| viewer@shenxi.test / 地研档案阅览员 | 七页只读 | 查看与下载已批准CSV、查看与下载比较CSV |
 
 演示密码均为 `Stratum2026!`。PBKDF2密码、HS256 JWT、角色依赖、actor审计、全局错误恢复与最多10个排队/运行任务。默认密钥与账号仅供本地演示。
 
@@ -35,7 +35,8 @@ docker compose exec -T backend python -m scripts.seed_demo
 5. 09:20 提交Redis，独立Python worker运行对数域前向后向与Viterbi回溯，结果落PostgreSQL和共享JSON。
 6. 09:25 沿深度查看读数、三态后验、点态argmax与整条MAP，核查对数分数与回溯前驱。
 7. 09:30 模型后来修订为v2时，旧研究和报告仍引用v1，分析员提交地学复核。
-8. 09:40 编辑批准后下载CSV，保留孔段、旧模型名称/概率/参数、点态后验、路径与回溯。
+8. 09:35 三态与四态两次完成运行归并到低/中高/高响应共同类别，逐段核对4处分歧孔段与各类别后验。
+9. 09:40 编辑批准后下载CSV，保留孔段、旧模型名称/概率/参数、点态后验、路径与回溯。
 
 ## 完整孔段与模型输入
 
@@ -63,6 +64,14 @@ CSV列borehole,depth_m,value，truth可选且仅作模拟参考。孔ID为1—30
 
 StateModel修订PATCH递增revision；研究保存完整孔段读数、truth参考、状态ID/人工名称/参数/初始/转移/修订号及源文件的规范JSON SHA256。worker仅读研究快照，后续模型编辑或数据集改名不改旧结果。报告固定引用批准运行及其旧版本；CSV含模型参数、转移、后验、点态/路径、模拟参考与回溯前驱。未批准生成被拒绝，重复决定409。
 
+## 双运行归并比较
+
+两套模型状态数与命名常不同（如三态v1与四态细分模型），无法逐状态对照同一孔段。RunComparison把两次已完成运行的状态分别归入人工声明的共同类别（1—8个，双方共用）：每个模型状态恰好归类一次，遗漏、重复归类、未声明类别或快照外状态一律拒绝比较。类别后验为同组状态后验逐点求和；两条Viterbi整路径先各自解码再映射到类别对齐，不拿点态argmax拼接。
+
+比较前逐点核对两次运行的孔号、深度与读数快照，任一不符（含点数不一致）即拒绝，不插值、不错位拼接。输出一致率、分歧点数、连续分歧孔段（起止深度、长度、双方涉及类别）与逐深度双类别后验。比较同步计算，不占解码队列；结果保存双方模型快照、运行校验与映射本身的SHA256。
+
+归并规则更新后通过重算接口另存新比较并记录supersedes，旧比较的双方快照与原映射保持不可改。比较页与导出CSV（映射表、分歧孔段、逐深度各类别后验）支持逐段核对；CSV带BOM与公式注入转义。归并类别是人工解释层，不新增地质含义。
+
 ## 工程与本地开发
 
 | 层 | 技术 |
@@ -72,9 +81,9 @@ StateModel修订PATCH递增revision；研究保存完整孔段读数、truth参�
 | 核心数值 | Python math自实现logsumexp、前向后向、Viterbi |
 | 异步与数据库 | Redis7.4 / 独立worker / PostgreSQL16 |
 
-81个代码源文件，src内77个职责文件。backend/src含routes/controllers/services/models/schemas/middlewares/utils/constants/config；frontend/src含api/stores/types/components/common/hooks/pages/router/utils/constants。DDL在backend/migrations，advisory lock保护首次建表。科学数值使用Python float双精度并在PostgreSQL JSON文本载荷无显示舍入往返，日志中的−∞用null编码。配套requirements沿用已测依赖，NumPy不是本项目核心算法依赖。
+87个代码源文件，src内83个职责文件。backend/src含routes/controllers/services/models/schemas/middlewares/utils/constants/config；frontend/src含api/stores/types/components/common/hooks/pages/router/utils/constants。DDL在backend/migrations，advisory lock保护首次建表。科学数值使用Python float双精度并在PostgreSQL JSON文本载荷无显示舍入往返，日志中的−∞用null编码。配套requirements沿用已测依赖，NumPy不是本项目核心算法依赖。
 
-Seed固定2409，3孔各160点，配置三态均值/方差与持久转移，含少量模拟测量扰动；truth为模拟生成态，仅参考。SEED_DEMO=true自动seed，失败记日志不阻断，自然键insert-only，重复不新增、不覆盖用户修改。普通SX-01种子两种标签可能完全一致；独立四点反例在验收中明确呈现两种目标差异。
+Seed固定2409，3孔各160点，配置三态均值/方差与持久转移，含少量模拟测量扰动；另置四态细分模型、SX-01第二研究与运行，以及三态×四态归并到三个共同类别的演示比较。truth为模拟生成态，仅参考。SEED_DEMO=true自动seed，失败记日志不阻断，自然键insert-only，重复不新增、不覆盖用户修改。普通SX-01种子两种标签可能完全一致；独立四点反例在验收中明确呈现两种目标差异。
 
 环境DATABASE_URL、REDIS_URL、JWT_SECRET、SEED_DEMO、TASK_MODE、ARTIFACT_DIR与端口/DB_PASSWORD见.env.example。本地配置PG/Redis，pip install backend/requirements.txt后uvicorn src.main:app --reload；前端npm ci && npm run dev，经/api反代。package与lock精确复用已测配套版本，仅改根项目名。
 

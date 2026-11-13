@@ -31,3 +31,16 @@ class ReportInput(InputModel):
  run_id:str
  review_id:str
  title:str=Field(min_length=2,max_length=100)
+class MappingEntry(InputModel):
+ state:str=Field(min_length=1,max_length=20)
+ category:str=Field(min_length=1,max_length=30)
+class ComparisonMapping(InputModel):
+ categories:list[str]=Field(min_length=1,max_length=8)
+ run_a:list[MappingEntry]=Field(min_length=2,max_length=4)
+ run_b:list[MappingEntry]=Field(min_length=2,max_length=4)
+class ComparisonInput(InputModel):
+ run_a_id:str
+ run_b_id:str
+ mapping:ComparisonMapping
+class RemapInput(InputModel):
+ mapping:ComparisonMapping

@@ -4,7 +4,9 @@ from src.utils.identity import now
 from src.utils.security import hash_password
 from src.services.statistics import analyze
 from src.services.study import lock_snapshot
+from src.services.comparison import compute
 def demo_config():return {'states':[{'id':'S1','name':'低响应态','mean':45.,'variance':16.},{'id':'S2','name':'中响应态','mean':70.,'variance':25.},{'id':'S3','name':'高响应态','mean':98.,'variance':16.}],'initial':[.6,.3,.1],'transition':[[.94,.05,.01],[.04,.92,.04],[.01,.06,.93]]}
+def demo_config4():return {'states':[{'id':'T1','name':'低响应细分态','mean':45.,'variance':16.},{'id':'T2','name':'中低响应细分态','mean':62.,'variance':20.},{'id':'T3','name':'中高响应细分态','mean':82.,'variance':20.},{'id':'T4','name':'高响应细分态','mean':98.,'variance':16.}],'initial':[.4,.3,.2,.1],'transition':[[.93,.06,.01,0.],[.05,.9,.05,0.],[0.,.06,.9,.04],[0.,.01,.06,.93]]}
 def demo_rows():
  rng=random.Random(2409);c=demo_config();rows=[]
  def choose(weights):
@@ -29,6 +31,13 @@ def seed():
  m={'id':'model-gaussian3','name':'三态高斯响应模型 · 人工命名v1','config':demo_config(),'revision':1,'created_at':now()};repo.put('state_models',m,insert_only=True)
  snapshot,checksum=lock_snapshot(d,m,'SX-01');study={'id':'study-sequence','name':'SX-01完整160米孔段复核','dataset_id':d['id'],'model_id':m['id'],'borehole':'SX-01','snapshot':snapshot,'checksum':checksum,'created_at':now()};repo.put('studies',study,insert_only=True)
  repo.put('runs',{'id':'run-demo','study_id':study['id'],'status':'completed','result':analyze(snapshot,checksum),'error':'','created_at':now()},insert_only=True)
+ m4={'id':'model-gaussian4','name':'四态细分响应模型 · 人工命名v1','config':demo_config4(),'revision':1,'created_at':now()};repo.put('state_models',m4,insert_only=True)
+ snapshot4,checksum4=lock_snapshot(d,m4,'SX-01');study4={'id':'study-sequence-4','name':'SX-01完整160米孔段 · 四态细分复核','dataset_id':d['id'],'model_id':m4['id'],'borehole':'SX-01','snapshot':snapshot4,'checksum':checksum4,'created_at':now()};repo.put('studies',study4,insert_only=True)
+ repo.put('runs',{'id':'run-demo-4','study_id':study4['id'],'status':'completed','result':analyze(snapshot4,checksum4),'error':'','created_at':now()},insert_only=True)
+ run_a,run_b=repo.get('runs','run-demo'),repo.get('runs','run-demo-4')
+ mapping={'categories':['低响应类别','中高响应类别','高响应类别'],'run_a':[{'state':'S1','category':'低响应类别'},{'state':'S2','category':'中高响应类别'},{'state':'S3','category':'高响应类别'}],'run_b':[{'state':'T1','category':'低响应类别'},{'state':'T2','category':'中高响应类别'},{'state':'T3','category':'中高响应类别'},{'state':'T4','category':'高响应类别'}]}
+ normalized,result=compute(run_a,run_b,mapping)
+ repo.put('comparisons',{'id':'cmp-demo','run_a_id':'run-demo','run_b_id':'run-demo-4','mapping':normalized,'result':result,'supersedes':'','created_at':now()},insert_only=True)
  repo.put('reviews',{'id':'review-demo','run_id':'run-demo','comment':'完整1米孔段、配置模型版本、点态后验与全路径MAP已分开核查。状态名是模型标签非地层真值。','status':'approved','reviewer':'admin@shenxi.test','created_at':now()},insert_only=True)
  repo.put('reports',{'id':'report-demo','run_id':'run-demo','review_id':'review-demo','title':'沉溪SX-01模型隐状态序列复核册','created_at':now()},insert_only=True)
- return {t:len(repo.all_rows(t)) for t in ('users','datasets','state_models','studies','runs','reviews','reports')}
+ return {t:len(repo.all_rows(t)) for t in ('users','datasets','state_models','studies','runs','reviews','reports','comparisons')}
